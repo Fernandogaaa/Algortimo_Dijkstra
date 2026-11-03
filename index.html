@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dijkstra Paso a Paso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="kicker">Camino mínimo · grafo dirigido sin ciclos</p>
+    <h1>Dijkstra paso a paso</h1>
+    <p class="lede">Genera un grafo o dibújalo conexión por conexión, elige origen y destino, y avanza vértice por vértice hasta ver todos los caminos mínimos.</p>
+  </header>
+
+  <div class="layout">
+    <section class="setup" aria-label="Configuración del grafo">
+      <div class="setup-row">
+        <div class="field">
+          <label for="nodes">Vértices <output id="nodesOut">9</output></label>
+          <input type="range" id="nodes" min="7" max="16" value="9">
+        </div>
+        <div class="field">
+          <span class="lbl" id="modeLbl">Grafo</span>
+          <div class="seg" role="group" aria-labelledby="modeLbl">
+            <button type="button" id="modeRandom" aria-pressed="true">Aleatorio</button>
+            <button type="button" id="modeManual" aria-pressed="false">Manual</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="src">Origen</label>
+          <select id="src"></select>
+        </div>
+        <div class="field">
+          <label for="dst">Destino</label>
+          <select id="dst"></select>
+        </div>
+        <div class="field actions">
+          <button type="button" class="btn" id="regen">Grafo aleatorio nuevo</button>
+          <label class="check"><input type="checkbox" id="ties"> Más empates (pesos 1–5)</label>
+        </div>
+      </div>
+
+      <div class="manual" id="manualPanel" hidden>
+        <form id="mForm" autocomplete="off">
+          <div class="field"><label for="mFrom">Desde</label><select id="mFrom"></select></div>
+          <div class="field"><label for="mTo">Hacia</label><select id="mTo"></select></div>
+          <div class="field"><label for="mW">Peso</label><input type="number" id="mW" min="0" max="99" step="1" value="5"></div>
+          <div class="field"><button type="submit" class="btn primary">Agregar conexión</button></div>
+          <div class="field"><button type="button" class="btn" id="mClear">Vaciar grafo</button></div>
+        </form>
+        <p class="msg" id="mMsg" aria-live="polite">Las conexiones que formen un ciclo se rechazan. Si repites una conexión, se actualiza su peso.</p>
+        <div class="echips" id="edgeList" aria-label="Conexiones del grafo"></div>
+      </div>
+    </section>
+
+    <section class="stage" aria-label="Grafo">
+      <div class="stage-head">
+        <h2>Grafo</h2>
+        <p class="hint" id="hint"></p>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <svg id="graph" role="group" aria-label="Grafo dirigido con pesos en las aristas"></svg>
+      </div>
+      <ul class="legend">
+        <li style="--nc: var(--c-org)"><span class="sw"></span>Origen</li>
+        <li style="--nc: var(--c-dst)"><span class="sw"></span>Destino</li>
+        <li style="--nc: var(--c-cur)"><span class="sw"></span>Vértice actual</li>
+        <li style="--nc: var(--c-vis)"><span class="sw"></span>Visitado</li>
+        <li style="--nc: var(--c-idle)"><span class="sw"></span>Pendiente</li>
+        <li style="--nc: var(--c-cur)"><span class="sl"></span>Arista en revisión</li>
+        <li style="--nc: var(--accent)"><span class="sl"></span>Mejor ruta conocida</li>
+        <li style="--nc: var(--c-path)"><span class="sl"></span>Camino mínimo</li>
+      </ul>
+      <p class="legend-note">El número sobre cada vértice es la distancia mínima conocida hasta él; vale ∞ mientras no se alcance.</p>
+      <div class="player">
+        <div class="scrub">
+          <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Paso del algoritmo">
+          <span id="stepCount">Paso 1 de 1</span>
+        </div>
+        <div class="btns">
+          <button type="button" class="btn" id="bReset">Reiniciar</button>
+          <button type="button" class="btn" id="bPrev">‹ Anterior</button>
+          <button type="button" class="btn primary" id="bPlay"></button>
+          <button type="button" class="btn" id="bNext">Siguiente ›</button>
+          <button type="button" class="btn" id="bVertex">Siguiente vértice</button>
+          <button type="button" class="btn" id="bEnd">Ir al resultado</button>
+          <label class="speed">Velocidad
+            <select id="speed">
+              <option value="1400">Lenta</option>
+              <option value="800" selected>Normal</option>
+              <option value="350">Rápida</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="result" aria-label="Caminos mínimos" aria-live="polite">
+      <h2>Caminos mínimos</h2>
+      <div id="resultBody"></div>
+    </section>
+
+    <aside class="side" aria-label="Estado del algoritmo">
+      <section class="blk">
+        <h2>Paso actual</h2>
+        <p class="status" id="status" aria-live="polite"></p>
+      </section>
+      <section class="blk">
+        <h2>Distancias</h2>
+        <table>
+          <thead><tr><th>Vértice</th><th style="text-align:right">Dist.</th><th>Viene de</th><th>Estado</th></tr></thead>
+          <tbody id="distBody"></tbody>
+        </table>
+      </section>
+      <section class="blk">
+        <h2>Cola de prioridad</h2>
+        <p class="note">Formato (distancia, vértice). Sale primero el de menor distancia.</p>
+        <div class="queue" id="queue"></div>
+      </section>
+      <section class="blk">
+        <h2>Registro</h2>
+        <ol class="log" id="log"></ol>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
